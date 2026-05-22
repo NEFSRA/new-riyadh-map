@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Riyadh — Compounds, Schools & Districts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root { --sand:#f5efe6; --charcoal:#1a1a2e; --gold:#c9a84c; --gold-light:#e8c97a; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Sora',sans-serif; background:var(--charcoal); color:var(--sand); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+  header { background:var(--charcoal); border-bottom:1px solid rgba(201,168,76,0.3); padding:10px 20px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; z-index:1000; }
+  header h1 { font-size:1rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--gold-light); }
+  header span { font-family:'IBM Plex Mono',monospace; font-size:0.7rem; color:rgba(245,239,230,0.4); letter-spacing:0.05em; }
+  #map { flex:1; width:100%; }
+
+  .legend { background:rgba(26,26,46,0.95); border:1px solid rgba(201,168,76,0.35); border-radius:8px; padding:14px 16px; min-width:210px; backdrop-filter:blur(8px); max-height:85vh; overflow-y:auto; }
+  .legend h3 { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.15em; color:var(--gold); margin-bottom:10px; font-weight:600; font-family:'Sora',sans-serif; }
+  .legend-item { display:flex; align-items:center; gap:9px; margin-bottom:6px; font-size:0.72rem; color:rgba(245,239,230,0.85); font-family:'Sora',sans-serif; }
+  .legend-dot { width:11px; height:11px; border-radius:50%; flex-shrink:0; border:2px solid rgba(255,255,255,0.3); }
+  .legend-emoji { font-size:13px; line-height:1; flex-shrink:0; width:16px; text-align:center; }
+  .legend-area { width:16px; height:11px; border-radius:3px; flex-shrink:0; opacity:0.85; }
+  .legend-divider { border:none; border-top:1px solid rgba(201,168,76,0.2); margin:8px 0; }
+
+  .compound-marker { background:#2563eb; border:2px solid #fff; border-radius:50%; width:12px; height:12px; box-shadow:0 1px 4px rgba(0,0,0,0.4); }
+  .school-marker { background:#16a34a; border:2px solid #fff; border-radius:50%; width:12px; height:12px; box-shadow:0 1px 4px rgba(0,0,0,0.4); }
+  .airport-marker { font-size:20px; line-height:1; filter:drop-shadow(0 1px 3px rgba(0,0,0,0.7)); }
+  .nursery-marker { font-size:16px; line-height:1; filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6)); }
+
+  .leaflet-tooltip { background:rgba(26,26,46,0.95)!important; border:1px solid rgba(201,168,76,0.4)!important; color:#f5efe6!important; font-family:'Sora',sans-serif!important; font-size:0.72rem!important; border-radius:5px!important; padding:5px 9px!important; box-shadow:0 2px 8px rgba(0,0,0,0.5)!important; }
+  .leaflet-tooltip-top:before { border-top-color:rgba(201,168,76,0.4)!important; }
+  .leaflet-popup-content-wrapper { background:rgba(26,26,46,0.97)!important; border:1px solid rgba(201,168,76,0.35)!important; color:#f5efe6!important; font-family:'Sora',sans-serif!important; font-size:0.78rem!important; border-radius:8px!important; }
+  .leaflet-popup-tip { background:rgba(26,26,46,0.97)!important; }
+  .leaflet-popup-content { margin:10px 14px!important; }
+  .popup-title { font-weight:600; font-size:0.82rem; color:var(--gold-light); margin-bottom:3px; }
+  .popup-type { font-size:0.67rem; color:rgba(245,239,230,0.5); text-transform:uppercase; letter-spacing:0.1em; }
+  .district-label { background:transparent!important; border:none!important; box-shadow:none!important; font-family:'Sora',sans-serif; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.1em; white-space:nowrap; pointer-events:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Riyadh — Compounds, Schools, Nurseries &amp; Districts</h1>
+  <span>70+ LOCATIONS &nbsp;|&nbsp; 8 DISTRICTS</span>
+</header>
+<div id="map"></div>
+<script>
+const map = L.map('map', { center:[24.78,46.68], zoom:12, zoomControl:true });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom:19
+}).addTo(map);
+
+function makeIcon(type) {
+  if (type==='school') return L.divIcon({ className:'', html:'<div class="school-marker"></div>', iconSize:[12,12], iconAnchor:[6,6], tooltipAnchor:[6,-6] });
+  if (type==='airport') return L.divIcon({ className:'', html:'<div class="airport-marker">✈️</div>', iconSize:[24,24], iconAnchor:[12,12], tooltipAnchor:[12,-12] });
+  if (type==='nursery') return L.divIcon({ className:'', html:'<div class="nursery-marker">🧸</div>', iconSize:[20,20], iconAnchor:[10,10], tooltipAnchor:[10,-10] });
+  return L.divIcon({ className:'', html:'<div class="compound-marker"></div>', iconSize:[12,12], iconAnchor:[6,6], tooltipAnchor:[6,-6] });
+}
+
+function pin(lat,lng,name,type) {
+  return L.marker([lat,lng],{icon:makeIcon(type)}).addTo(map)
+    .bindTooltip(name,{direction:'top',offset:[0,-4]})
+    .bindPopup(`<div class="popup-title">${name}</div><div class="popup-type">${type}</div>`);
+}
+
+// ── COMPOUNDS ──────────────────────────────────────────────────────────────
+[
+  [24.8297772,46.7371896,"Wadi Qortuba"],
+  [24.8101851,46.7206545,"California Compound"],
+  [24.8115772,46.7267616,"Arizona Golf Resort"],
+  [24.8019199,46.6560163,"Kingdom City"],
+  [24.7934946,46.7296625,"Al Hamra Oasis Village"],
+  [24.7776625,46.5839762,"Azure Hittin"],
+  [24.8381155,46.6621544,"Azure Narjis"],
+  [24.8428964,46.7722371,"Azure Lamara"],
+  [24.9005434,46.6391757,"Flow Narjis"],
+  [24.7893309,46.7391841,"Flow Granada"],
+  [24.8088047,46.7327395,"Al Nakhla Residential Resort"],
+  [24.7477773,46.699505,"Arabian Homes Compound"],
+  [24.9414376,46.7999475,"Andorra Village"],
+  [24.9524578,46.7964554,"Salwa Garden Village"],
+  [24.8515239,46.6379184,"Al Bustan Village"],
+  [24.7931479,46.8059136,"Ishbilia Residential Compound"],
+  [24.8348629,46.750393,"Azure Al Reem"],
+  [24.6596315,46.7604686,"Azure Asala"],
+  [24.8731406,46.597726,"Azure Palma I"],
+  [24.8747854,46.601039,"Azure Palma II"],
+  [24.8309615,46.5549981,"Azure Qairawan"],
+  [24.6867036,46.7463528,"Azure Rabwah"],
+  [24.7939375,46.6871875,"Azure Wadi"],
+  [24.6643792,46.7017014,"Azure Central"],
+  [24.822174,46.6917916,"Azure Takhassusi"],
+  [24.7698993,46.6404477,"Azure KAFD"],
+  [24.8194638,46.6919864,"Azure Galleria"],
+  [24.7088152,46.679083,"Flow Olaya"],
+  [24.7058064,46.6147598,"Palms Estate Compound"],
+  [24.7907781,46.5616561,"Antara Compound"],
+  [24.7178591,46.7918058,"Ranco Village"],
+  [24.8149038,46.8509587,"Vives I"],
+  [24.8135832,46.8525576,"Vives II"],
+].forEach(([la,ln,nm]) => pin(la,ln,nm,'compound'));
+
+// ── SCHOOLS ────────────────────────────────────────────────────────────────
+[
+  [24.7915524,46.7298648,"🎓 BISR Al Hamra"],
+  [24.6808724,46.628304,"🎓 BISR Diplomatic Quarter"],
+  [24.7910109,46.7475672,"🎓 BISR Al Waha"],
+  [24.8140574,46.643558,"🎓 Aldenham Prep School"],
+  [24.7850325,46.6516225,"🎓 SEK International School"],
+  [24.8006695,46.7466508,"🎓 Reigate Grammar School"],
+  [24.8474708,46.6346445,"🎓 American International School"],
+  [24.761246,46.6273133,"🎓 Downe House Riyadh"],
+  [24.761925,46.5745858,"🎓 King's College Riyadh"],
+  [24.7801806,46.7347423,"🎓 EtonHouse International School"],
+  [24.8007551,46.6915401,"🎓 Ecole Française Internationale de Riyadh"],
+].forEach(([la,ln,nm]) => pin(la,ln,nm,'school'));
+
+// ── AIRPORT ────────────────────────────────────────────────────────────────
+pin(24.959443,46.7010829,"King Khalid International Airport",'airport');
+
+// ── NURSERIES ─────────────────────────────────────────────────────────────
+[
+  // Kinderland — California compound area
+  [24.8105,46.7215,"🧸 Kinderland (California Compound)"],
+  // Home Sweet Home
+  [24.7305106,46.6489603,"🧸 Home Sweet Home Preschool"],
+  // Clouds Garden — inside Azure Lamara
+  [24.8440037,46.7731544,"🧸 Clouds Garden Preschool"],
+  // Kids Home branches
+  [24.80826,46.7311255,"🧸 Kids Home (Al Nakhla)"],
+  [24.761966,46.6388816,"🧸 Kids Home (KAFD)"],
+  [24.9403482,46.8000175,"🧸 Kids Home (Andorra Village)"],
+  // EtonHouse nursery (same location as school, slight offset)
+  [24.7795,46.7355,"🧸 EtonHouse Nursery"],
+  // Little Angel Montessori — Ishbilia
+  [24.795903,46.8048991,"🧸 Little Angels Montessori (Ishbilia)"],
+  // Bright Schools Montessori — Al Hamra / Arizona area
+  [24.8121,46.7269,"🧸 Bright Schools Montessori (Al Hamra/Arizona)"],
+  // Smart Kids Montessori branches
+  [24.8520625,46.6381875,"🧸 Smart Kids Montessori (Al Bustan)"],
+  [24.8349267,46.7524106,"🧸 Smart Kids Montessori (Azure Al Reem)"],
+  [24.686704,46.7463528,"🧸 Smart Kids Montessori (Azure Rabwah)"],
+  [24.8149,46.8515,"🧸 Smart Kids Montessori (Vives I)"],
+  [24.7886111,46.5628119,"🧸 Smart Kids Montessori (Antara)"],
+  [24.873063,46.6003103,"🧸 Smart Kids Montessori (Azure La Palma)"],
+].forEach(([la,ln,nm]) => pin(la,ln,nm,'nursery'));
+
+// ── DISTRICTS ─────────────────────────────────────────────────────────────
+const districts = [
+  { name:"Al Olaya", color:"#f59e0b", coords:[[24.715,46.662],[24.715,46.700],[24.675,46.700],[24.675,46.662]] },
+  { name:"KAFD", color:"#8b5cf6", coords:[[24.778,46.630],[24.778,46.660],[24.754,46.660],[24.754,46.630]] },
+  { name:"Digital City", color:"#06b6d4", coords:[[24.752,46.624],[24.752,46.647],[24.728,46.647],[24.728,46.624]] },
+  { name:"Laysen Valley", color:"#10b981", coords:[[24.702,46.620],[24.702,46.648],[24.681,46.648],[24.681,46.620]] },
+  { name:"Diplomatic Quarter", color:"#ef4444", coords:[[24.695,46.603],[24.695,46.637],[24.666,46.637],[24.666,46.603]] },
+  { name:"The Business Gate", color:"#f97316", coords:[[24.818,46.704],[24.818,46.730],[24.798,46.730],[24.798,46.704]] },
+  { name:"Roshn Business Front", color:"#ec4899", coords:[[24.863,46.720],[24.863,46.752],[24.840,46.752],[24.840,46.720]] },
+  { name:"Diriyah", color:"#d97706", coords:[[24.755,46.564],[24.755,46.600],[24.718,46.600],[24.718,46.564]] },
+  { name:"Qiddiya", color:"#7c3aed", coords:[[24.610,46.295],[24.610,46.375],[24.560,46.375],[24.560,46.295]] }
+];
+
+districts.forEach(d => {
+  L.polygon(d.coords,{ color:d.color, weight:2.5, opacity:0.95, fillColor:d.color, fillOpacity:0.18, dashArray:'6 4' })
+    .addTo(map)
+    .bindPopup(`<div class="popup-title">${d.name}</div><div class="popup-type">District / Zone</div>`);
+  const lats=d.coords.map(c=>c[0]), lngs=d.coords.map(c=>c[1]);
+  L.marker([(Math.min(...lats)+Math.max(...lats))/2,(Math.min(...lngs)+Math.max(...lngs))/2],{
+    icon:L.divIcon({ className:'district-label', html:`<span style="color:${d.color};text-shadow:0 1px 3px rgba(255,255,255,0.9),0 0 6px rgba(255,255,255,0.6),0 2px 6px rgba(0,0,0,0.5)">${d.name}</span>`, iconAnchor:[0,0] }),
+    interactive:false, zIndexOffset:500
+  }).addTo(map);
+});
+
+// ── LEGEND ────────────────────────────────────────────────────────────────
+const legendControl = L.control({position:'bottomright'});
+legendControl.onAdd = () => {
+  const div = L.DomUtil.create('div');
+  div.innerHTML = `
+<div class="legend">
+  <h3>Legend</h3>
+  <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div> Compound</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> School</div>
+  <div class="legend-item"><div class="legend-emoji">🧸</div> Nursery</div>
+  <div class="legend-item"><div class="legend-emoji">✈️</div> Airport</div>
+  <hr class="legend-divider">
+  ${districts.map(d=>`<div class="legend-item"><div class="legend-area" style="background:${d.color};border:1.5px dashed ${d.color}"></div>${d.name}</div>`).join('')}
+</div>`;
+  return div;
+};
+legendControl.addTo(map);
+</script>
+</body>
+</html>
